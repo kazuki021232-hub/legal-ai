@@ -11,6 +11,12 @@
 </head>
 <body style="margin:0">
 <div id="root"></div>
+<div id="api-bar" style="background:#1a2a4a;padding:10px 20px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.3)">
+  <span style="color:#fff;font-size:13px;font-weight:700;white-space:nowrap">🔑 APIキー</span>
+  <input id="global-api-key" type="password" placeholder="sk-ant-api03-..." 
+    style="flex:1;padding:7px 12px;font-size:13px;border-radius:6px;border:1.5px solid #c0592a;font-family:monospace;max-width:500px"/>
+  <span style="color:#aaa;font-size:11px;white-space:nowrap">console.anthropic.com で取得</span>
+</div>
 <script type="text/babel">
 const { useState, useRef } = React;
 
@@ -57,6 +63,8 @@ function App() {
   const fv = (x) => x?.current?.value?.trim() || "";
 
   const generate = async () => {
+    const apiKey = document.getElementById('global-api-key')?.value?.trim();
+    if (!apiKey) { setError("APIキーを入力してください（画面上部）"); return; }
     if (!fv(r)) { setError("依頼者名を入力してください"); return; }
     setLoading(true); setResult(""); setEditText(""); setEditMode(false); setError("");
     const d2 = docRef.current;
@@ -79,6 +87,7 @@ function App() {
             "content-type": "application/json",
             "anthropic-version": "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true",
+            "x-api-key": apiKey,
           },
           body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 6000, messages: msgs }),
         });
