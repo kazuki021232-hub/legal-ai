@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>士業 AI書類作成</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+
+
+const DOCS = [
+  { cat: "契約書類", items: ["業務委託契約書", "顧問契約書", "秘密保持契約書", "売買契約書", "賃貸借契約書", "請負契約書"] },
+  { cat: "請求・見積", items: ["請求書", "見積書", "領収書", "納品書", "支払通知書"] },
+  { cat: "報告書類", items: ["業務報告書", "調査報告書", "意見書", "鑑定書", "診断書（法的）"] },
+  { cat: "申請書類", items: ["内容証明郵便", "通知書", "催告書", "示談書", "和解契約書"] },
+  { cat: "社内書類", items: ["委任状", "誓約書", "覚書", "合意書", "議事録"] },
+];
+
+const HINTS = {
+  "業務委託契約書": "委託者・受託者・業務内容・期間・報酬・支払条件・秘密保持・著作権・解除条件・管轄裁判所",
+  "顧問契約書": "委託者・顧問氏名・顧問業務内容・契約期間・顧問料・支払方法・秘密保持・専属条項・解除",
+  "秘密保持契約書": "開示者・受領者・秘密情報の定義・使用目的・第三者提供禁止・返還義務・有効期間・損害賠償",
+  "請求書": "請求先・請求元・請求日・支払期限・品目・数量・単価・金額・消費税・合計・振込先口座",
+  "見積書": "見積先・見積元・見積日・有効期限・品目・数量・単価・金額・消費税・合計・備考",
+  "業務報告書": "報告期間・作業内容・実施結果・課題・次期予定・所要時間・担当者",
+  "内容証明郵便": "送付者・受取人・事実経緯・請求内容・期限・法的根拠・対応しない場合の措置",
+  "示談書": "当事者・事件の概要・解決金額・支払方法・清算条項・守秘義務・公序良俗",
+  "議事録": "会議名・日時・場所・出席者・議題・審議内容・決定事項・次回予定",
+};
+
+function App() {
+  const [doc, setDoc] = useState("業務委託契約書");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState("");
+  const [editText, setEditText] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const docRef = useRef("業務委託契約書");
+
+  const r = useRef(); // 依頼者
+  const p = useRef(); // 相手方
+  const d = useRef(); // 日付
+  const a = useRef(); // 金額
+  const t = useRef(); // 期間
+  const n = useRef(); // 担当者/署名
+  const e = useRef(); // 追加情報
+
+  const fv = (x) => x?.current?.value?.trim() || "";
+
+  const generate = async () => {
+    if (!fv(r)) { setError("依頼者名を入力してください"); return; }
+    setLoading(true); setResult(""); setEditText(""); setEditMode(false); setError("");
+    const d2 = docRef.current;
+    const hint = HINTS[d2] || "必要な条項をすべて含め実務で使える形式で";
+    const info = [
+      "依頼者:" + fv(r),
+      fv(p) && "相手方:" + fv(p),
+      fv(d) && "日付:" + fv(d),
+      fv(a) && "金額:" + fv(a),
+      fv(t) && "期間:" + fv(t),
+      fv(n) && "担当者:" + fv(n),
+      fv(e) && "詳細:" + fv(e),
+    ].filter(Boolean).join(" ");
+    const prompt = `日本の士業専門家として「${d2}」を作成してください。\n構成:${hint}\n書式:##見出し/-箇条書き/表はMarkdown/条文は第1条形式/空欄は【　】\n${info}`;
+    try {
+      const doFetch = async (msgs, attempt = 0) => {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 6000, messages: msgs }),
+        });
+        const j = await res.json();
+        if (j.error) {
+          if (j.error.type === "overloaded_error" && attempt < 2) {
+            setResult("⏳ 混雑中…再試行します");
+            await new Promise(r => setTimeout(r, (attempt + 1) * 8000));
+            return doFetch(msgs, attempt + 1);
+          }
+          throw new Error(j.error.message);
+        }
+        return { text: j.content?.[0]?.text || "", stop: j.stop_reason };
+      };
+      let { text, stop } = await doFetch([{ role: "user", content: prompt }]);
+      let round = 0;
+      while (stop === "max_tokens" && round < 2) {
+        round++;
+        setResult(text + `\n\n*続きを生成中 (${round}/2)...*`);
+        const cont = await doFetch([
+          { role: "user", content: prompt },
+          { role: "assistant", content: text },
+          { role: "user", content: "続きを書いてください。重複せず続きから。" },
+        ]);
+        text += "\n" + cont.text;
+        stop = cont.stop;
+      }
+      setResult(text); setEditText(text);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectDoc = (v) => { setDoc(v); docRef.current = v; };
+
+  const copyText = () => {
+    const t = editMode ? editText : result;
+    try {
+      navigator.clipboard.writeText(t).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = t; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const getText = () => editMode ? editText : result;
+
+  const mdToHtml = (text, forPrint = false) => {
+    let html = "", inTable = false;
+    const lines = text.split("\n");
+    const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    lines.forEach((line, i) => {
+      const close = () => { if (inTable) { html += "</table>"; inTable = false; } };
+      if (line.startsWith("### "))     { close(); html += `<h3>${esc(line.slice(4))}</h3>`; }
+      else if (line.startsWith("## ")) { close(); html += `<h2>${esc(line.slice(3))}</h2>`; }
+      else if (line.startsWith("# "))  { close(); html += `<h1>${esc(line.slice(2))}</h1>`; }
+      else if (line.startsWith("- "))  { close(); html += `<li>${esc(line.slice(2))}</li>`; }
+      else if (/^第\d+条/.test(line))  { close(); html += `<p class="article">${esc(line)}</p>`; }
+      else if (line.startsWith("|")) {
+        if (line.includes("---")) return;
+        const cells = line.split("|").filter((_, j, a) => j > 0 && j < a.length - 1);
+        const isH = lines[i + 1]?.includes("---");
+        if (!inTable) { html += "<table>"; inTable = true; }
+        html += "<tr>" + cells.map(c => isH ? `<th>${esc(c.trim())}</th>` : `<td>${esc(c.trim())}</td>`).join("") + "</tr>";
+      } else {
+        close();
+        html += line.trim() ? `<p>${esc(line)}</p>` : "<br>";
+      }
+    });
+    if (inTable) html += "</table>";
+    return html;
+  };
+
+  const printCSS = `
+    body{font-family:"Meiryo",sans-serif;font-size:11pt;margin:2.5cm;line-height:1.9;color:#111}
+    h1{font-size:16pt;font-weight:bold;text-align:center;margin:0 0 24px;letter-spacing:.1em}
+    h2{font-size:13pt;font-weight:bold;border-bottom:1.5px solid #333;margin:18px 0 8px;padding-bottom:3px}
+    h3{font-size:11pt;font-weight:bold;margin:12px 0 4px}
+    p.article{margin:6px 0;text-indent:0}
+    li{margin:3px 0 3px 20px;list-style:none}li::before{content:"・"}
+    table{border-collapse:collapse;width:100%;margin:8px 0;font-size:10pt}
+    th,td{border:1px solid #999;padding:5px 8px}th{background:#eee;font-weight:bold}
+    p{margin:3px 0}
+    @media print{@page{margin:2cm}}
+  `;
+
+  const downloadWord = () => {
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>${printCSS}</style></head><body>${mdToHtml(getText())}</body></html>`;
+    const blob = new Blob(["\uFEFF" + html], { type: "application/msword;charset=utf-8" });
+    const a2 = document.createElement("a");
+    a2.href = URL.createObjectURL(blob);
+    a2.download = doc + ".doc";
+    document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+    setTimeout(() => URL.revokeObjectURL(a2.href), 1000);
+  };
+
+  const downloadExcel = () => {
+    const lines = getText().split("\n");
+    let csv = "\uFEFF";
+    lines.forEach(line => {
+      if (line.startsWith("|") && !line.includes("---")) {
+        csv += line.split("|").filter((_, i, a) => i > 0 && i < a.length - 1)
+          .map(c => `"${c.trim().replace(/"/g, '""')}"`).join(",") + "\n";
+      } else if (line.trim()) {
+        csv += `"${line.replace(/"/g, '""')}"\n`;
+      } else { csv += "\n"; }
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a2 = document.createElement("a");
+    a2.href = URL.createObjectURL(blob);
+    a2.download = doc + ".csv";
+    document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+    setTimeout(() => URL.revokeObjectURL(a2.href), 1000);
+  };
+
+  const printDoc = () => {
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>${doc}</title><style>${printCSS}</style></head><body>${mdToHtml(getText())}<script>window.onload=()=>{window.print()}<\/script></body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
+  const inp = (ref, ph, req) => (
+    <input ref={ref} placeholder={ph} style={{
+      width: "100%", padding: "8px 10px", fontSize: 13, border: `1.5px solid ${req ? "#c0845a" : "#dde3ea"}`,
+      borderRadius: 6, fontFamily: "inherit", background: "#fafbfc", outline: "none",
+    }} />
+  );
+
+  const renderMd = (text) => {
+    return text.split("\n").map((line, i) => {
+      if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 13, fontWeight: 700, color: "#2c3e50", margin: "10px 0 3px" }}>{line.slice(4)}</h4>;
+      if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", borderBottom: "2px solid #4a9ede", paddingBottom: 3, margin: "14px 0 5px" }}>{line.slice(3)}</h3>;
+      if (line.startsWith("# ")) return <h2 key={i} style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", textAlign: "center", margin: "14px 0 10px", letterSpacing: "0.08em" }}>{line.slice(2)}</h2>;
+      if (line.startsWith("- ")) return <div key={i} style={{ padding: "2px 0 2px 16px", fontSize: 13, lineHeight: 1.8 }}>・{line.slice(2)}</div>;
+      if (/^第\d+条/.test(line)) return <p key={i} style={{ fontSize: 13, fontWeight: 600, margin: "8px 0 3px", color: "#1a2a3a" }}>{line}</p>;
+      if (line.startsWith("|")) {
+        if (line.includes("---")) return null;
+        const cells = line.split("|").filter((_, j, a) => j > 0 && j < a.length - 1);
+        const isH = text.split("\n")[i + 1]?.includes("---");
+        return (
+          <div key={i} style={{ display: "flex", borderBottom: "1px solid #d0dce8" }}>
+            {cells.map((c, j) => (
+              <div key={j} style={{ flex: 1, padding: "5px 8px", fontSize: 12, fontWeight: isH ? 700 : 400, background: isH ? "#eef3f8" : "transparent", borderRight: "1px solid #d0dce8" }}>{c.trim()}</div>
+            ))}
+          </div>
+        );
+      }
+      if (!line.trim()) return <div key={i} style={{ height: 6 }} />;
+      return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, margin: "2px 0" }}>{line}</p>;
+    });
+  };
+
+  const S = {
+    wrap: { fontFamily: "'Noto Sans JP', sans-serif", minHeight: "100vh", background: "#f0f2f5" },
+    header: { background: "linear-gradient(135deg, #1a2a4a 0%, #2d4a7a 100%)", color: "#fff", padding: "0 20px", height: 54, display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 2px 10px rgba(0,0,0,.3)" },
+    layout: { display: "grid", gridTemplateColumns: "360px 1fr", gap: 16, maxWidth: 1150, margin: "0 auto", padding: 16, alignItems: "start" },
+    card: { background: "#fff", border: "1px solid #e0e6ed", borderRadius: 10, overflow: "hidden", marginBottom: 14, boxShadow: "0 1px 4px rgba(0,0,0,.06)" },
+    cardHd: { background: "linear-gradient(135deg,#1a2a4a,#2d4a7a)", color: "#fff", padding: "11px 16px", fontSize: 13, fontWeight: 700 },
+    cardBd: { padding: 14 },
+    tag: (on) => ({ padding: "4px 9px", fontSize: 11, fontWeight: 600, border: `1.5px solid ${on ? "#c0592a" : "#d0dce8"}`, borderRadius: 12, cursor: "pointer", background: on ? "#c0592a" : "#fff", color: on ? "#fff" : "#1a2a3a", fontFamily: "inherit", margin: "2px" }),
+    btnMain: (dis) => ({ padding: "12px 0", fontSize: 14, fontWeight: 700, border: "none", borderRadius: 8, width: "100%", cursor: dis ? "not-allowed" : "pointer", background: dis ? "#aaa" : "linear-gradient(135deg,#c0592a,#8b3515)", color: "#fff", fontFamily: "inherit", boxShadow: dis ? "none" : "0 3px 10px rgba(192,89,42,.4)", marginTop: 10 }),
+    lbl: { fontSize: 11, fontWeight: 700, color: "#5a7a9a", display: "block", marginBottom: 3, marginTop: 8 },
+  };
+
+  return (
+    <div style={S.wrap}>
+      <div style={S.header}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>⚖️</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>士業 AI書類作成</div>
+            <div style={{ fontSize: 10, opacity: .7 }}>契約書・請求書・報告書を即座に生成</div>
+          </div>
+        </div>
+        <span style={{ background: "#c0592a", fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 10 }}>AI POWERED</span>
+      </div>
+
+      <div style={S.layout}>
+        {/* 左パネル */}
+        <div>
+          <div style={S.card}>
+            <div style={S.cardHd}>📄 書類の種類を選択</div>
+            <div style={{ padding: 12 }}>
+              {DOCS.map(cat => (
+                <div key={cat.cat} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#7a8a9a", marginBottom: 4 }}>{cat.cat}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap" }}>
+                    {cat.items.map(v => (
+                      <button key={v} style={S.tag(doc === v)} onClick={() => selectDoc(v)}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={S.card}>
+            <div style={S.cardHd}>✏️ 情報を入力</div>
+            <div style={S.cardBd}>
+              <label style={S.lbl}>依頼者・作成者名 *</label>
+              {inp(r, "山田太郎 / 山田法律事務所", true)}
+              <label style={S.lbl}>相手方・宛先</label>
+              {inp(p, "株式会社○○ / 鈴木一郎")}
+              <label style={S.lbl}>日付</label>
+              {inp(d, "2025年4月1日")}
+              <label style={S.lbl}>金額・報酬</label>
+              {inp(a, "月額50,000円（税込）")}
+              <label style={S.lbl}>期間・有効期限</label>
+              {inp(t, "2025年4月1日〜2026年3月31日")}
+              <label style={S.lbl}>担当者・署名者</label>
+              {inp(n, "弁護士 山田太郎")}
+              <label style={S.lbl}>追加情報・特記事項 <span style={{ color: "#c0592a", fontWeight: 400 }}>（詳しく書くほど精度UP）</span></label>
+              <textarea ref={e} placeholder="業務内容、特別条件、注意事項など" rows={4}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 12, border: "1.5px solid #dde3ea", borderRadius: 6, fontFamily: "inherit", resize: "vertical", background: "#fafbfc" }} />
+              <button style={S.btnMain(loading)} disabled={loading} onClick={generate}>
+                {loading ? "⏳ 生成中…" : `✨ 「${doc}」を生成`}
+              </button>
+              {error && <div style={{ padding: "8px 12px", background: "#fff0f0", border: "1px solid #f0a0a0", borderRadius: 6, fontSize: 12, color: "#8a1a1a", marginTop: 8 }}>{error}</div>}
+            </div>
+          </div>
+        </div>
+
+        {/* 右パネル */}
+        <div style={{ ...S.card, position: "sticky", top: 16 }}>
+          <div style={{ background: "linear-gradient(135deg,#1a2a4a,#2d4a7a)", color: "#fff", padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>⚖️ {doc}</span>
+            {result && (
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {[
+                  { label: editMode ? "✅ プレビュー" : "✏️ 編集", bg: editMode ? "#c0592a" : "rgba(255,255,255,.2)", action: () => setEditMode(!editMode) },
+                  { label: copied ? "✅ コピー済" : "📋 コピー", bg: "rgba(255,255,255,.2)", action: copyText },
+                  { label: "📝 Word", bg: "#2b7489", action: downloadWord },
+                  { label: "📊 Excel", bg: "#217346", action: downloadExcel },
+                  { label: "🖨 印刷/PDF", bg: "#8b1a1a", action: printDoc },
+                ].map(b => (
+                  <button key={b.label} onClick={b.action} style={{ background: b.bg, border: "none", color: "#fff", padding: "5px 11px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}>{b.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ minHeight: 500, maxHeight: "78vh", overflowY: "auto" }}>
+            {loading ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, gap: 14, color: "#c0592a" }}>
+                <div style={{ fontSize: 48 }}>⚖️</div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>AIが{doc}を作成中…</div>
+                <div style={{ fontSize: 12, color: "#7a8a9a" }}>しばらくお待ちください</div>
+              </div>
+            ) : editMode ? (
+              <textarea value={editText} onChange={e2 => setEditText(e2.target.value)}
+                style={{ width: "100%", height: "78vh", padding: 20, fontSize: 13, lineHeight: 1.9, fontFamily: "monospace", border: "none", outline: "none", resize: "none", background: "#fffef8" }} />
+            ) : result ? (
+              <div style={{ padding: 20 }}>{renderMd(editMode ? editText : result)}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, gap: 10, color: "#7a8a9a", textAlign: "center" }}>
+                <div style={{ fontSize: 56 }}>⚖️</div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>左側で書類を選択・情報を入力して</div>
+                <div style={{ fontWeight: 700, color: "#c0592a", fontSize: 15 }}>「生成」ボタンを押してください</div>
+                <div style={{ fontSize: 11, color: "#9aabba", marginTop: 4 }}>詳しく入力するほど精度が上がります</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
