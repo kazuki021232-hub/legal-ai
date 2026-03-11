@@ -43,7 +43,7 @@ function App() {
   const [editText, setEditText] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [error, setError] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  const apiKeyRef = useRef();
   const [copied, setCopied] = useState(false);
   const docRef = useRef("業務委託契約書");
 
@@ -58,7 +58,8 @@ function App() {
   const fv = (x) => x?.current?.value?.trim() || "";
 
   const generate = async () => {
-    if (!apiKey.trim()) { setError("画面上部にAPIキーを入力してください"); return; }
+    const apiKey = apiKeyRef.current?.value?.trim() || "";
+    if (!apiKey) { setError("画面上部にAPIキーを入力してください"); return; }
     if (!fv(r)) { setError("依頼者名を入力してください"); return; }
     setLoading(true); setResult(""); setEditText(""); setEditMode(false); setError("");
     const d2 = docRef.current;
@@ -264,8 +265,7 @@ function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 420, marginLeft: 20 }}>
           <span style={{ fontSize: 11, color: "#aac", whiteSpace: "nowrap" }}>🔑 APIキー</span>
           <input
-            value={apiKey}
-            onChange={e2 => setApiKey(e2.target.value)}
+            ref={apiKeyRef}
             type="password"
             placeholder="sk-ant-api03-..."
             style={{ flex: 1, padding: "6px 10px", fontSize: 12, borderRadius: 6, border: "1.5px solid #c0592a", fontFamily: "monospace", background: "#0f1e3a", color: "#fff", outline: "none" }}
