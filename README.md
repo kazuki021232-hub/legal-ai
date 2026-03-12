@@ -1,0 +1,366 @@
+[index.html](https://github.com/user-attachments/files/25934101/index.html)
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>士業 AI書類作成</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Meiryo','Noto Sans JP',sans-serif;background:#f0f2f5;color:#1a2a3a;font-size:14px}
+#api-bar{background:#1a2a4a;padding:10px 20px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#api-bar label{color:#aac;font-size:12px;white-space:nowrap;font-weight:700}
+#api-key{flex:1;max-width:480px;padding:7px 12px;font-size:12px;border-radius:6px;border:1.5px solid #c0592a;font-family:monospace;background:#0f1e3a;color:#fff;outline:none}
+.badge{background:#c0592a;font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;color:#fff;margin-left:auto}
+.layout{display:grid;grid-template-columns:360px 1fr;gap:16px;max-width:1150px;margin:0 auto;padding:16px;align-items:start}
+.card{background:#fff;border:1px solid #e0e6ed;border-radius:10px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card-hd{background:linear-gradient(135deg,#1a2a4a,#2d4a7a);color:#fff;padding:11px 16px;font-size:13px;font-weight:700}
+.card-bd{padding:14px}
+.cat-label{font-size:10px;font-weight:700;color:#7a8a9a;margin:8px 0 4px}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
+.tag{padding:4px 9px;font-size:11px;font-weight:600;border:1.5px solid #d0dce8;border-radius:12px;cursor:pointer;background:#fff;color:#1a2a3a;transition:all .1s}
+.tag.on{background:#c0592a;border-color:#c0592a;color:#fff}
+label.lbl{font-size:11px;font-weight:700;color:#5a7a9a;display:block;margin:8px 0 3px}
+input.fi,textarea.fi{width:100%;padding:8px 10px;font-size:13px;border:1.5px solid #dde3ea;border-radius:6px;font-family:inherit;background:#fafbfc;outline:none}
+input.req{border-color:#c0852a}
+textarea.fi{resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#btn-gen{width:100%;padding:12px;font-size:14px;font-weight:700;border:none;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#c0592a,#8b3515);color:#fff;font-family:inherit;box-shadow:0 3px 10px rgba(192,89,42,.4);margin-top:10px}
+#btn-gen:disabled{background:#aaa;box-shadow:none;cursor:not-allowed}
+#err-msg{display:none;padding:8px 12px;background:#fff0f0;border:1px solid #f0a0a0;border-radius:6px;font-size:12px;color:#8a1a1a;margin-top:8px;word-break:break-all}
+.result-panel{background:#fff;border:1px solid #e0e6ed;border-radius:10px;overflow:hidden;position:sticky;top:60px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.result-hd{background:linear-gradient(135deg,#1a2a4a,#2d4a7a);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.result-hd span{font-size:14px;font-weight:700}
+.dl-btns{display:none;gap:5px;flex-wrap:wrap}
+.dl-btns button{border:none;color:#fff;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit}
+#result-body{min-height:500px;max-height:78vh;overflow-y:auto;padding:20px;line-height:1.9}
+#edit-area{display:none;width:100%;height:78vh;padding:20px;font-size:13px;line-height:1.9;font-family:monospace;border:none;outline:none;resize:none;background:#fffef8}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;gap:10px;color:#7a8a9a;text-align:center}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;gap:14px;color:#c0592a;text-align:center}
+h1.md{font-size:17px;font-weight:700;color:#1a2a3a;text-align:center;margin:14px 0 10px;letter-spacing:.08em;border-bottom:2px solid #1a2a3a;padding-bottom:6px}
+h2.md{font-size:14px;font-weight:700;color:#1a2a3a;border-bottom:2px solid #4a9ede;padding-bottom:3px;margin:14px 0 5px}
+h3.md{font-size:13px;font-weight:700;color:#2c3e50;margin:10px 0 3px}
+p.md{font-size:13px;line-height:1.9;margin:2px 0}
+li.md{font-size:13px;line-height:1.8;padding:2px 0 2px 16px;list-style:none}
+li.md::before{content:"・"}
+p.article{font-size:13px;font-weight:600;margin:8px 0 3px;color:#1a2a3a}
+table.md{border-collapse:collapse;width:100%;margin:8px 0;font-size:12px}
+table.md th{background:#eef3f8;font-weight:700;padding:6px 8px;border:1px solid #d0dce8;text-align:left}
+table.md td{padding:5px 8px;border:1px solid #d0dce8}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.result-panel{position:static}}
+</style>
+</head>
+<body>
+
+<div id="api-bar">
+  <label for="api-key">🔑 APIキー</label>
+  <input type="password" id="api-key" placeholder="sk-ant-api03-...">
+  <span style="color:#888;font-size:11px;white-space:nowrap">console.anthropic.com で取得</span>
+  <span class="badge">AI POWERED</span>
+</div>
+
+<div class="layout">
+  <div>
+    <div class="card">
+      <div class="card-hd">📄 書類の種類を選択</div>
+      <div class="card-bd" id="cat-area"></div>
+    </div>
+    <div class="card">
+      <div class="card-hd">✏️ 情報を入力</div>
+      <div class="card-bd">
+        <label class="lbl">依頼者・作成者名 *</label>
+        <input class="fi req" id="f-client" placeholder="山田太郎 / 山田法律事務所">
+        <label class="lbl">相手方・宛先</label>
+        <input class="fi" id="f-party" placeholder="株式会社○○ / 鈴木一郎">
+        <label class="lbl">日付</label>
+        <input class="fi" id="f-date" placeholder="2025年4月1日">
+        <div class="grid2">
+          <div><label class="lbl">金額・報酬</label><input class="fi" id="f-amount" placeholder="月額50,000円"></div>
+          <div><label class="lbl">期間</label><input class="fi" id="f-period" placeholder="2025年4月〜2026年3月"></div>
+        </div>
+        <label class="lbl">担当者・署名者</label>
+        <input class="fi" id="f-name" placeholder="弁護士 山田太郎">
+        <label class="lbl">追加情報・特記事項 <span style="color:#c0592a;font-weight:400">（詳しく書くほど精度UP）</span></label>
+        <textarea class="fi" id="f-note" rows="4" placeholder="業務内容、特別条件、注意事項など"></textarea>
+        <button id="btn-gen" onclick="generate()">✨ AI作成</button>
+        <div id="err-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="result-panel">
+    <div class="result-hd">
+      <span id="result-title">⚖️ 書類</span>
+      <div class="dl-btns" id="dl-btns">
+        <button style="background:rgba(255,255,255,.2)" onclick="toggleEdit()" id="btn-edit">✏️ 編集</button>
+        <button style="background:rgba(255,255,255,.2)" onclick="copyText()">📋 コピー</button>
+        <button style="background:#2b7489" onclick="downloadWord()">📝 Word</button>
+        <button style="background:#217346" onclick="downloadExcel()">📊 Excel</button>
+        <button style="background:#8b1a1a" onclick="printDoc()">🖨 印刷/PDF</button>
+      </div>
+    </div>
+    <div id="result-body">
+      <div class="empty">
+        <div style="font-size:56px">⚖️</div>
+        <div style="font-weight:700;font-size:14px">書類を選択して情報を入力</div>
+        <div style="font-weight:700;color:#c0592a;font-size:15px">「AI作成」ボタンを押してください</div>
+      </div>
+    </div>
+    <textarea id="edit-area" oninput="currentText=this.value"></textarea>
+  </div>
+</div>
+
+<script>
+const DOCS=[
+  {cat:"契約書類",items:["業務委託契約書","顧問契約書","秘密保持契約書","売買契約書","賃貸借契約書","請負契約書"]},
+  {cat:"請求・見積",items:["請求書","見積書","領収書","納品書","支払通知書"]},
+  {cat:"報告書類",items:["業務報告書","調査報告書","意見書","鑑定書"]},
+  {cat:"申請書類",items:["内容証明郵便","通知書","催告書","示談書","和解契約書"]},
+  {cat:"社内書類",items:["委任状","誓約書","覚書","合意書","議事録"]},
+];
+const HINTS={
+  "業務委託契約書":"委託者・受託者・業務内容・期間・報酬・支払条件・秘密保持・著作権・解除条件・管轄裁判所",
+  "顧問契約書":"委託者・顧問名・顧問業務・契約期間・顧問料・支払方法・秘密保持・解除",
+  "秘密保持契約書":"開示者・受領者・秘密情報の定義・使用目的・第三者提供禁止・返還義務・有効期間",
+  "請求書":"請求先・請求元・請求日・支払期限・品目・数量・単価・金額・消費税・合計・振込先",
+  "見積書":"見積先・見積元・見積日・有効期限・品目・数量・単価・金額・消費税・合計",
+  "業務報告書":"報告期間・作業内容・実施結果・課題・次期予定・所要時間・担当者",
+  "内容証明郵便":"送付者・受取人・事実経緯・請求内容・期限・法的根拠・対応しない場合の措置",
+  "示談書":"当事者・事件概要・解決金額・支払方法・清算条項・守秘義務",
+  "議事録":"会議名・日時・場所・出席者・議題・審議内容・決定事項・次回予定",
+};
+
+let currentDoc="業務委託契約書", currentText="", editMode=false;
+
+// カテゴリ描画
+const area=document.getElementById('cat-area');
+DOCS.forEach(cat=>{
+  const d=document.createElement('div');
+  d.innerHTML='<div class="cat-label">'+cat.cat+'</div><div class="tags"></div>';
+  const tags=d.querySelector('.tags');
+  cat.items.forEach(v=>{
+    const b=document.createElement('button');
+    b.className='tag'+(v===currentDoc?' on':'');
+    b.textContent=v;
+    b.onclick=()=>{
+      document.querySelectorAll('.tag').forEach(t=>t.classList.remove('on'));
+      b.classList.add('on');
+      currentDoc=v;
+      document.getElementById('result-title').textContent='⚖️ '+v;
+      document.getElementById('btn-gen').textContent='✨ 「'+v+'」をAI作成';
+    };
+    tags.appendChild(b);
+  });
+  area.appendChild(d);
+});
+
+function g(id){return (document.getElementById(id)?.value||'').trim();}
+
+async function generate(){
+  const key=g('api-key');
+  if(!key){showErr('APIキーを入力してください（画面上部）');return;}
+  const client=g('f-client');
+  if(!client){showErr('依頼者名を入力してください');return;}
+
+  const btn=document.getElementById('btn-gen');
+  btn.disabled=true; btn.textContent='⏳ 生成中…';
+  document.getElementById('err-msg').style.display='none';
+  document.getElementById('dl-btns').style.display='none';
+  document.getElementById('edit-area').style.display='none';
+  document.getElementById('result-body').style.display='block';
+  editMode=false;
+  document.getElementById('btn-edit').textContent='✏️ 編集';
+  document.getElementById('result-body').innerHTML='<div class="loading"><div style="font-size:48px">⚖️</div><div style="font-weight:700;font-size:15px">AIが'+currentDoc+'を作成中…</div></div>';
+
+  const hint=HINTS[currentDoc]||'必要な条項をすべて含め実務で使える形式で';
+  const info=[
+    '依頼者:'+client,
+    g('f-party')&&'相手方:'+g('f-party'),
+    g('f-date')&&'日付:'+g('f-date'),
+    g('f-amount')&&'金額:'+g('f-amount'),
+    g('f-period')&&'期間:'+g('f-period'),
+    g('f-name')&&'担当者:'+g('f-name'),
+    g('f-note')&&'特記:'+g('f-note'),
+  ].filter(Boolean).join(' ');
+  const prompt='日本の士業専門家として「'+currentDoc+'」を作成。構成:'+hint+' 書式:##見出し/-箇条書き/条文は第1条形式/空欄は【　】\n'+info;
+
+  try{
+    const doFetch=async(msgs,attempt=0)=>{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{
+          'content-type':'application/json',
+          'x-api-key':key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:6000,messages:msgs})
+      });
+      const j=await res.json();
+      if(j.error){
+        if(j.error.type==='overloaded_error'&&attempt<2){
+          await new Promise(r=>setTimeout(r,(attempt+1)*8000));
+          return doFetch(msgs,attempt+1);
+        }
+        throw new Error(j.error.message||'APIエラー: '+JSON.stringify(j.error));
+      }
+      return{text:j.content?.[0]?.text||'',stop:j.stop_reason};
+    };
+
+    let{text,stop}=await doFetch([{role:'user',content:prompt}]);
+    let round=0;
+    while(stop==='max_tokens'&&round<2){
+      round++;
+      document.getElementById('result-body').innerHTML='<div class="loading"><div>⚖️</div><div>続きを生成中('+round+'/2)…</div></div>';
+      const cont=await doFetch([
+        {role:'user',content:prompt},
+        {role:'assistant',content:text},
+        {role:'user',content:'続きを書いてください。重複せず続きから。'}
+      ]);
+      text+='\n'+cont.text; stop=cont.stop;
+    }
+
+    currentText=text;
+    document.getElementById('edit-area').value=text;
+    document.getElementById('result-body').innerHTML=renderMd(text);
+    document.getElementById('dl-btns').style.display='flex';
+  }catch(e){
+    showErr(e.message);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='✨ 「'+currentDoc+'」をAI作成';
+  }
+}
+
+function toggleEdit(){
+  editMode=!editMode;
+  const body=document.getElementById('result-body');
+  const area=document.getElementById('edit-area');
+  const btn=document.getElementById('btn-edit');
+  if(editMode){
+    btn.textContent='✅ プレビュー';
+    btn.style.background='#c0592a';
+    body.style.display='none';
+    area.style.display='block';
+    area.value=currentText;
+  }else{
+    currentText=area.value;
+    btn.textContent='✏️ 編集';
+    btn.style.background='rgba(255,255,255,.2)';
+    body.innerHTML=renderMd(currentText);
+    body.style.display='block';
+    area.style.display='none';
+  }
+}
+
+function copyText(){
+  const t=editMode?document.getElementById('edit-area').value:currentText;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(t);
+  }else{
+    const ta=document.createElement('textarea');
+    ta.value=t; ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  const b=event.target; b.textContent='✅ コピー済';
+  setTimeout(()=>b.textContent='📋 コピー',2000);
+}
+
+const CSS=`body{font-family:"Meiryo",sans-serif;font-size:11pt;margin:2.5cm;line-height:1.9;color:#111}
+h1{font-size:16pt;font-weight:bold;text-align:center;margin:0 0 24px;border-bottom:2px solid #000;padding-bottom:6px}
+h2{font-size:13pt;font-weight:bold;border-bottom:1.5px solid #333;margin:18px 0 8px;padding-bottom:3px}
+h3{font-size:11pt;font-weight:bold;margin:12px 0 4px}
+.article{font-weight:600;margin:8px 0 3px}
+li{margin-left:20px;list-style:none}li::before{content:"・"}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:10pt}
+th,td{border:1px solid #999;padding:5px 8px}th{background:#eee;font-weight:bold}p{margin:3px 0}`;
+
+function mdToHtml(text){
+  let html='',inTable=false;
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  text.split('\n').forEach((line,i,arr)=>{
+    const close=()=>{if(inTable){html+='</table>';inTable=false;}};
+    if(line.startsWith('### ')){close();html+='<h3>'+esc(line.slice(4))+'</h3>';}
+    else if(line.startsWith('## ')){close();html+='<h2>'+esc(line.slice(3))+'</h2>';}
+    else if(line.startsWith('# ')){close();html+='<h1>'+esc(line.slice(2))+'</h1>';}
+    else if(line.startsWith('- ')){close();html+='<li>'+esc(line.slice(2))+'</li>';}
+    else if(/^第\d+条/.test(line)){close();html+='<p class="article">'+esc(line)+'</p>';}
+    else if(line.startsWith('|')){
+      if(line.includes('---'))return;
+      const cells=line.split('|').filter((_,j,a)=>j>0&&j<a.length-1);
+      const isH=arr[i+1]?.includes('---');
+      if(!inTable){html+='<table>';inTable=true;}
+      html+='<tr>'+cells.map(c=>isH?'<th>'+esc(c.trim())+'</th>':'<td>'+esc(c.trim())+'</td>').join('')+'</tr>';
+    }else{close();html+=line.trim()?'<p>'+esc(line)+'</p>':'<br>';}
+  });
+  if(inTable)html+='</table>';
+  return html;
+}
+
+function renderMd(text){
+  // 画面表示用（クラス付き）
+  let html='',inTable=false;
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  text.split('\n').forEach((line,i,arr)=>{
+    const close=()=>{if(inTable){html+='</table>';inTable=false;}};
+    if(line.startsWith('### ')){close();html+='<h3 class="md">'+esc(line.slice(4))+'</h3>';}
+    else if(line.startsWith('## ')){close();html+='<h2 class="md">'+esc(line.slice(3))+'</h2>';}
+    else if(line.startsWith('# ')){close();html+='<h1 class="md">'+esc(line.slice(2))+'</h1>';}
+    else if(line.startsWith('- ')){close();html+='<li class="md">'+esc(line.slice(2))+'</li>';}
+    else if(/^第\d+条/.test(line)){close();html+='<p class="article">'+esc(line)+'</p>';}
+    else if(line.startsWith('|')){
+      if(line.includes('---'))return;
+      const cells=line.split('|').filter((_,j,a)=>j>0&&j<a.length-1);
+      const isH=arr[i+1]?.includes('---');
+      if(!inTable){html+='<table class="md">';inTable=true;}
+      html+='<tr>'+cells.map(c=>isH?'<th>'+esc(c.trim())+'</th>':'<td>'+esc(c.trim())+'</td>').join('')+'</tr>';
+    }else{close();html+=line.trim()?'<p class="md">'+esc(line)+'</p>':'<br>';}
+  });
+  if(inTable)html+='</table>';
+  return html;
+}
+
+function downloadWord(){
+  if(!currentText)return;
+  const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>'+CSS+'</style></head><body>'+mdToHtml(currentText)+'</body></html>';
+  const blob=new Blob(['\uFEFF'+html],{type:'application/msword;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=currentDoc+'.doc';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+function downloadExcel(){
+  if(!currentText)return;
+  let csv='\uFEFF';
+  currentText.split('\n').forEach(line=>{
+    if(line.startsWith('|')&&!line.includes('---')){
+      csv+=line.split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>'"'+c.trim().replace(/"/g,'""')+'"').join(',')+'\n';
+    }else if(line.trim()){
+      csv+='"'+line.replace(/"/g,'""')+'"\n';
+    }else{csv+='\n';}
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=currentDoc+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+function printDoc(){
+  if(!currentText)return;
+  const html='<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>'+currentDoc+'</title><style>'+CSS+'</style></head><body>'+mdToHtml(currentText)+'<script>window.onload=()=>{window.print();}<\/script></body></html>';
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else{alert('ポップアップを許可してください');}
+}
+
+function showErr(msg){
+  const e=document.getElementById('err-msg');
+  e.textContent='❌ '+msg; e.style.display='block';
+  document.getElementById('result-body').innerHTML='<div class="empty"><div style="font-size:40px">⚠️</div><div>'+msg+'</div></div>';
+}
+</script>
+</body>
+</html>
